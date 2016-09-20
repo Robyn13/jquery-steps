@@ -206,6 +206,7 @@ function destroy(wizard, options)
     return wizardSubstitute;
 }
 
+
 /**
  * Triggers the onFinishing and onFinished event.
  *
@@ -215,18 +216,27 @@ function destroy(wizard, options)
  * @param wizard {Object} The jQuery wizard object
  * @param state {Object} The state container of the current wizard
  **/
-function finishStep(wizard, state)
+function finishStep(wizard, options, state)
 {
-    var currentStep = wizard.find(".steps li").eq(state.currentIndex);
+    var oldIndex = state.currentIndex;
+	var i = 0;
+    for (i; i < state.stepCount; i++) {
+        var currentStep = wizard.find(".steps li").eq(i);
+        if (wizard.triggerHandler("finishing", [i]))
+        {
+            currentStep.addClass("done").removeClass("error");
+            if (i === state.stepCount - 1) {
+                wizard.triggerHandler("finished", [i]);
+            }
+        }
+        else {
+            currentStep.addClass("error");
+			if (i !== oldIndex){
+				applyStepChange(wizard, options, state, i);
+			}
+            break;
+        }
 
-    if (wizard.triggerHandler("finishing", [state.currentIndex]))
-    {
-        currentStep.addClass("done").removeClass("error");
-        wizard.triggerHandler("finished", [state.currentIndex]);
-    }
-    else
-    {
-        currentStep.addClass("error");
     }
 }
 
@@ -416,7 +426,7 @@ function goToPreviousStep(wizard, options, state)
 }
 
 /**
- * Routes to a specific step by a given index.
+ * Initiates Routing to a specific step by a given index.
  *
  * @static
  * @private
@@ -434,33 +444,67 @@ function goToStep(wizard, options, state, index)
         throwError(_indexOutOfRangeErrorMessage);
     }
 
-    if (options.forceMoveForward && index < state.currentIndex)
-    {
-        return;
+    if (index < state.currentIndex) {
+        if (options.forceMoveForward) {
+            return;
+        }
+        else {
+            applyStepChange(wizard, options, state, index);
+        }
     }
+    else {
+        var oldIndex = state.currentIndex;
+		var i = oldIndex;
+        for (i; i <= index; i++) {
+            //doesn't matter if the step we are going to is valid or not
+            if (wizard.triggerHandler("stepChanging", [i, index]) || i === index) {
+                wizard.find(".steps li").eq(i).removeClass("error");
 
-    var oldIndex = state.currentIndex;
-    if (wizard.triggerHandler("stepChanging", [state.currentIndex, index]))
-    {
-        // Save new state
-        state.currentIndex = index;
-        saveCurrentStateToCookie(wizard, options, state);
+                //don't change steps until we are done
+                if (i === index) {
+                    applyStepChange(wizard, options, state, index);
+                }
+            }
+            else {
+                wizard.find(".steps li").eq(i).addClass("error");
 
-        // Change visualisation
-        refreshStepNavigation(wizard, options, state, oldIndex);
-        refreshPagination(wizard, options, state);
-        loadAsyncContent(wizard, options, state);
-        startTransitionEffect(wizard, options, state, index, oldIndex, function()
-        {
-            wizard.triggerHandler("stepChanged", [index, oldIndex]);
-        });
-    }
-    else
-    {
-        wizard.find(".steps li").eq(oldIndex).addClass("error");
+                //no need to change step if we are already on the invalid step
+                if (i !== oldIndex) {
+                    applyStepChange(wizard, options, state, i);
+                }
+                break;
+            }
+        }
     }
 
     return true;
+}
+
+
+/**
+ * Applies Routing to a specific step by a given index.
+ *
+ * @static
+ * @private
+ * @method goToStep
+ * @param wizard {Object} The jQuery wizard object
+ * @param options {Object} Settings of the current wizard
+ * @param state {Object} The state container of the current wizard
+ * @param newIndex {Integer} The position (zero-based) to route to
+**/
+function applyStepChange(wizard, options, state, newIndex) {
+    // Save new state
+    var oldIndex = state.currentIndex;
+    state.currentIndex = newIndex;
+    saveCurrentStateToCookie(wizard, options, state);
+
+    // Change visualisation
+    refreshStepNavigation(wizard, options, state, oldIndex);
+    refreshPagination(wizard, options, state);
+    loadAsyncContent(wizard, options, state);
+    startTransitionEffect(wizard, options, state, state.currentIndex, oldIndex, function () {
+        wizard.triggerHandler("stepChanged", [state.currentIndex, oldIndex]);
+    });
 }
 
 function increaseCurrentIndexBy(state, increaseBy)
@@ -734,7 +778,7 @@ function paginationClickHandler(event)
             break;
 
         case "finish":
-            finishStep(wizard, state);
+            finishStep(wizard, options, state);
             break;
 
         case "next":

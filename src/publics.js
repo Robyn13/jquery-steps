@@ -54,7 +54,7 @@ $.fn.steps.destroy = function ()
  **/
 $.fn.steps.finish = function ()
 {
-    finishStep(this, getState(this));
+    finishStep(this, getOptions(this), getState(this));
 };
 
 /**
@@ -153,9 +153,12 @@ $.fn.steps.remove = function (index)
  * @param index {Integer} An integer that belongs to the position of a step
  * @param step {Object} The step object to change
  **/
-$.fn.steps.setStep = function (index, step)
+$.fn.steps.setStep = function (step)
 {
-    throw new Error("Not yet implemented!");
+    var options = getOptions(this),
+        state = getState(this);
+
+    return goToStep(this, options, state, step);
 };
 
 /**
